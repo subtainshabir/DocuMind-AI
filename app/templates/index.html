@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuMind AI</title>
+
+<!-- Bootstrap (layout helpers only — visual identity comes from style.css) -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<!-- Bootstrap Icons — single consistent icon set for the whole app -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<!-- Fonts: Sora for headings/brand, Inter for body text -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- Mobile top bar: only visible on small screens -->
+<header class="mobile-topbar">
+  <button id="menuToggle" class="icon-btn" aria-label="Open menu">
+    <i class="bi bi-list"></i>
+  </button>
+  <span class="mobile-brand">DocuMind <span class="accent-text">AI</span></span>
+  <button id="mobileThemeToggle" class="icon-btn" aria-label="Toggle theme">
+    <i class="bi bi-moon-stars"></i>
+  </button>
+</header>
+
+<!-- Backdrop shown behind the sidebar on mobile when it's open -->
+<div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+<div class="app-shell">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <span class="brand-mark"><i class="bi bi-stars"></i></span>
+        <span class="brand-name">DocuMind <span class="accent-text">AI</span></span>
+      </div>
+      <button id="sidebarClose" class="icon-btn sidebar-close" aria-label="Close menu">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <button class="new-chat-btn">
+      <i class="bi bi-plus-lg"></i>
+      <span>New Chat</span>
+    </button>
+
+    <nav class="sidebar-nav">
+
+      <div class="nav-group">
+        <p class="nav-label">Main</p>
+        <a href="#" class="nav-item active">
+          <i class="bi bi-chat-dots"></i><span>New Chat</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i class="bi bi-clock-history"></i><span>Recent Chats</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <p class="nav-label">Documents</p>
+        <a href="#" class="nav-item">
+          <i class="bi bi-file-earmark-text"></i><span>Documents</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i class="bi bi-collection"></i><span>Collections</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <p class="nav-label">Modes</p>
+        <a href="#" class="nav-item">
+          <i class="bi bi-search"></i><span>Research Mode</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i class="bi bi-mortarboard"></i><span>Study Mode</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <p class="nav-label">Other</p>
+        <a href="#" class="nav-item">
+          <i class="bi bi-gear"></i><span>Settings</span>
+        </a>
+      </div>
+
+    </nav>
+
+    <div class="sidebar-footer">
+      <button id="themeToggle" class="theme-toggle-btn">
+        <i class="bi bi-moon-stars"></i>
+        <span id="themeToggleLabel">Dark mode</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN WORKSPACE ================= -->
+  <main class="workspace">
+
+    <!-- Welcome / empty state, shown when no conversation is active -->
+    <section id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-mark">
+        <i class="bi bi-stars"></i>
+      </div>
+      <h1 class="welcome-title">DocuMind <span class="accent-text">AI</span></h1>
+      <p class="welcome-subtitle">Understand, analyze, and interact with your documents using AI.</p>
+
+      <div class="suggestion-grid">
+        <button class="suggestion-card" data-prompt="Ask questions about a document">
+          <i class="bi bi-chat-square-text"></i>
+          <span>Ask questions about a document</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Summarize a document">
+          <i class="bi bi-list-check"></i>
+          <span>Summarize a document</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Compare documents">
+          <i class="bi bi-files"></i>
+          <span>Compare documents</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Explain a difficult concept">
+          <i class="bi bi-lightbulb"></i>
+          <span>Explain a difficult concept</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Research a paper">
+          <i class="bi bi-journal-text"></i>
+          <span>Research a paper</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Generate study material">
+          <i class="bi bi-mortarboard"></i>
+          <span>Generate study material</span>
+        </button>
+      </div>
+
+      <p class="placeholder-note">
+        <i class="bi bi-info-circle"></i>
+        These are example actions. AI responses are not implemented in Phase 1.
+      </p>
+    </section>
+
+    <!-- Conversation area, hidden until the user sends a message -->
+    <section id="chatArea" class="chat-area">
+      <div id="chatMessages" class="chat-messages"></div>
+    </section>
+
+    <!-- ================= CHAT INPUT ================= -->
+    <div class="chat-input-bar">
+      <div class="chat-input-wrapper">
+
+        <button class="icon-btn attach-btn" aria-label="Attach a document" title="Attach a document (UI only)">
+          <i class="bi bi-paperclip"></i>
+        </button>
+
+        <textarea
+          id="chatInput"
+          class="chat-input"
+          rows="1"
+          placeholder="Ask anything about your documents..."
+        ></textarea>
+
+        <div class="mode-selector">
+          <select id="modeSelect" aria-label="Select mode">
+            <option value="chat">Chat</option>
+            <option value="research">Research Mode</option>
+            <option value="study">Study Mode</option>
+          </select>
+        </div>
+
+        <button id="sendBtn" class="send-btn" aria-label="Send message" title="Send (UI only in Phase 1)">
+          <i class="bi bi-send"></i>
+        </button>
+      </div>
+      <p class="input-footnote">DocuMind AI is a UI foundation in Phase 1 — responses are not generated yet.</p>
+    </div>
+
+  </main>
+
+  <!-- ================= DOCUMENT PANEL ================= -->
+  <aside class="doc-panel">
+    <div class="doc-panel-header">
+      <h2><i class="bi bi-file-earmark-text"></i> Documents</h2>
+      <button class="icon-btn" title="Upload a document (UI only)">
+        <i class="bi bi-plus-lg"></i>
+      </button>
+    </div>
+
+    <div class="doc-empty-state">
+      <i class="bi bi-inbox"></i>
+      <p class="doc-empty-title">No documents yet</p>
+      <p class="doc-empty-subtitle">Upload a document to begin.</p>
+    </div>
+
+    <!-- Example placeholder document item (for future phases — kept commented as reference)
+    <div class="doc-item">
+      <i class="bi bi-file-earmark-pdf doc-item-icon"></i>
+      <div class="doc-item-info">
+        <p class="doc-item-name">example.pdf</p>
+        <span class="doc-item-status badge-muted">Not processed</span>
+      </div>
+      <button class="icon-btn doc-item-remove" aria-label="Remove document">
+        <i class="bi bi-trash3"></i>
+      </button>
+    </div>
+    -->
+  </aside>
+
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
