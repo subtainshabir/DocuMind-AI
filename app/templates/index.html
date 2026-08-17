@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 </head>
 <body>
 
@@ -184,33 +184,26 @@
   <aside class="doc-panel">
     <div class="doc-panel-header">
       <h2><i class="bi bi-file-earmark-text"></i> Documents</h2>
-      <button class="icon-btn" title="Upload a document (UI only)">
+      <button id="uploadTriggerBtn" class="icon-btn" title="Upload a document">
         <i class="bi bi-plus-lg"></i>
       </button>
     </div>
 
-    <div class="doc-empty-state">
-      <i class="bi bi-inbox"></i>
-      <p class="doc-empty-title">No documents yet</p>
-      <p class="doc-empty-subtitle">Upload a document to begin.</p>
+    <input type="file" id="fileInput" accept=".pdf,.docx,.txt" multiple hidden>
+
+    <div id="dropZone" class="drop-zone">
+      <i class="bi bi-cloud-arrow-up"></i>
+      <p>Drag &amp; drop files here</p>
+      <p class="drop-zone-sub">or click to browse — PDF, DOCX, TXT</p>
     </div>
 
-    <!-- Example placeholder document item (for future phases — kept commented as reference)
-    <div class="doc-item">
-      <i class="bi bi-file-earmark-pdf doc-item-icon"></i>
-      <div class="doc-item-info">
-        <p class="doc-item-name">example.pdf</p>
-        <span class="doc-item-status badge-muted">Not processed</span>
-      </div>
-      <button class="icon-btn doc-item-remove" aria-label="Remove document">
-        <i class="bi bi-trash3"></i>
-      </button>
-    </div>
-    -->
+    <!-- Populated by documents.js: shows the empty state or the uploaded document list -->
+    <div id="docList" class="doc-list"></div>
   </aside>
 
 </div>
 
-<script src="/static/js/app.js"></script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/documents.js') }}"></script>
 </body>
 </html>
