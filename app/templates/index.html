@@ -152,7 +152,7 @@
     <div class="chat-input-bar">
       <div class="chat-input-wrapper">
 
-        <button class="icon-btn attach-btn" aria-label="Attach a document" title="Attach a document (UI only)">
+        <button id="attachTriggerBtn" class="icon-btn attach-btn" aria-label="Attach a document" title="Attach a document">
           <i class="bi bi-paperclip"></i>
         </button>
 
@@ -203,7 +203,23 @@
 
 </div>
 
-<script src="{{ url_for('static', path='js/app.js') }}"></script>
-<script src="{{ url_for('static', path='js/documents.js') }}"></script>
+<!-- Extracted text preview modal (Phase 3) -->
+<div id="textPreviewOverlay" class="text-preview-overlay">
+  <div class="text-preview-card">
+    <div class="text-preview-header">
+      <div>
+        <h3 id="textPreviewTitle">Extracted Text</h3>
+        <p id="textPreviewSubtitle" class="text-preview-subtitle"></p>
+      </div>
+      <button id="textPreviewClose" class="icon-btn" aria-label="Close">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div id="textPreviewBody" class="text-preview-body"></div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', path='js/app.js') }}?v=1"></script>
+<script src="{{ url_for('static', path='js/documents.js') }}?v=3"></script>
 </body>
 </html>

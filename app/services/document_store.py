@@ -1,10 +1,10 @@
 """
-DocuMind AI - Phase 2: Document storage and metadata handling.
+DocuMind AI - Document storage and metadata handling (Phase 2)
+plus extraction metadata support (Phase 3).
 
 This module saves uploaded files to a local uploads/ folder and
-tracks their metadata in a JSON file. It does NOT read or process
-file contents - that is Phase 3's job. Phase 2 only stores files
-and tracks metadata: Upload -> Validate -> Store -> Track.
+tracks their metadata in a JSON file. It does NOT extract or read
+file contents itself - that is services/document_extractor.py's job.
 """
 
 import json
@@ -15,7 +15,10 @@ from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
-BASE_DIR = Path(__file__).resolve().parent
+# This file lives in app/services/, so the app root is one level up.
+# uploads/ and documents_metadata.json live at the app root, alongside
+# extracted/ (see document_extractor.py).
+BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 METADATA_FILE = BASE_DIR / "documents_metadata.json"
 
@@ -107,6 +110,12 @@ async def save_document(file: UploadFile) -> dict:
         "size_bytes": len(content),
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "status": "uploaded",
+        # Phase 3 extraction fields - all empty until /extract is called.
+        "extraction_status": "uploaded",
+        "extraction_timestamp": None,
+        "character_count": None,
+        "page_count": None,
+        "extraction_error": None,
     }
 
     all_docs = _load_metadata()
@@ -131,8 +140,21 @@ def get_document(document_id: str) -> dict:
     return document
 
 
+def update_extraction_metadata(document_id: str, **fields) -> dict:
+    """Patch a document's extraction-related metadata fields and save."""
+    all_docs = _load_metadata()
+    document = all_docs.get(document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    document.update(fields)
+    all_docs[document_id] = document
+    _save_metadata(all_docs)
+    return document
+
+
 def delete_document(document_id: str) -> None:
-    """Remove a document's stored file and its metadata entry."""
+    """Remove a document's stored file, its metadata entry, and any extracted text."""
     all_docs = _load_metadata()
     document = all_docs.get(document_id)
     if not document:
@@ -141,6 +163,11 @@ def delete_document(document_id: str) -> None:
     stored_path = UPLOAD_DIR / document["stored_filename"]
     if stored_path.exists():
         stored_path.unlink()
+
+    # Imported here (not at top) to avoid a circular import, since
+    # document_extractor.py does not need anything from this module.
+    from services.document_extractor import delete_extracted
+    delete_extracted(document_id)
 
     del all_docs[document_id]
     _save_metadata(all_docs)

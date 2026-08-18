@@ -1,16 +1,26 @@
 /*
-  DocuMind AI - Phase 2 frontend script.
+  DocuMind AI frontend script.
 
-  Talks to the document API (/api/documents) to upload, list, and
-  delete documents. It does NOT read or process file contents -
-  that belongs to a later phase. This file only manages the
-  upload -> store -> list -> delete flow in the UI.
+  Phase 2: upload, list, and delete documents via /api/documents.
+  Phase 3: request text extraction and preview extracted text via
+  /api/documents/{id}/extract and /api/documents/{id}/text.
+
+  This file does NOT extract text itself - it only calls the API
+  and renders whatever the backend returns.
 */
 
 const DOCUMENTS_API = "/api/documents";
 
+const EXTRACTION_LABELS = {
+  uploaded: "Extract Text",
+  extracting: "Extracting...",
+  extracted: "View Text",
+  extraction_failed: "Extraction Failed",
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   initUpload();
+  initTextPreview();
   loadDocuments();
 });
 
@@ -22,6 +32,10 @@ function initUpload() {
   const uploadTriggerBtn = document.getElementById("uploadTriggerBtn");
 
   uploadTriggerBtn.addEventListener("click", () => fileInput.click());
+
+  const attachTriggerBtn = document.getElementById("attachTriggerBtn");
+  if (attachTriggerBtn) attachTriggerBtn.addEventListener("click", () => fileInput.click());
+
   dropZone.addEventListener("click", () => fileInput.click());
 
   fileInput.addEventListener("change", () => {
@@ -77,7 +91,7 @@ async function uploadOneFile(file) {
   }
 }
 
-/* ---------------- Rendering ---------------- */
+/* ---------------- Rendering the document list ---------------- */
 
 function showPendingItem(id, filename) {
   const docList = document.getElementById("docList");
@@ -85,9 +99,13 @@ function showPendingItem(id, filename) {
   item.className = "doc-item";
   item.id = id;
   item.innerHTML = `
-    <i class="bi bi-hourglass-split doc-item-icon"></i>
-    <div class="doc-item-info">
-      <p class="doc-item-name">${escapeHtml(filename)}</p>
+    <div class="doc-item-top">
+      <i class="bi bi-hourglass-split doc-item-icon"></i>
+      <div class="doc-item-info">
+        <p class="doc-item-name">${escapeHtml(filename)}</p>
+      </div>
+    </div>
+    <div class="doc-item-meta">
       <span class="badge-muted">Uploading...</span>
     </div>
   `;
@@ -137,20 +155,67 @@ function renderDocumentList(documents) {
   docList.querySelectorAll("[data-delete-id]").forEach((button) => {
     button.addEventListener("click", () => deleteDocument(button.dataset.deleteId));
   });
+
+  docList.querySelectorAll(".extract-btn").forEach((button) => {
+    button.addEventListener("click", () => handleExtractButtonClick(button));
+  });
 }
 
 function renderDocumentItem(doc) {
+  const extractionStatus = doc.extraction_status || "uploaded";
+  const label = EXTRACTION_LABELS[extractionStatus] || "Extract Text";
+  const disabled = extractionStatus === "extracting" ? "disabled" : "";
+
   return `
     <div class="doc-item">
-      <i class="bi ${extensionIcon(doc.extension)} doc-item-icon"></i>
-      <div class="doc-item-info">
-        <p class="doc-item-name">${escapeHtml(doc.original_filename)}</p>
-        <span class="badge-muted">${formatFileSize(doc.size_bytes)} · ${formatDate(doc.uploaded_at)} · ${escapeHtml(doc.status)}</span>
+      <div class="doc-item-top">
+        <i class="bi ${extensionIcon(doc.extension)} doc-item-icon"></i>
+        <div class="doc-item-info">
+          <p class="doc-item-name" title="${escapeHtml(doc.original_filename)}">${escapeHtml(doc.original_filename)}</p>
+        </div>
+        <button class="icon-btn doc-item-remove" data-delete-id="${doc.document_id}" aria-label="Remove document">
+          <i class="bi bi-trash3"></i>
+        </button>
       </div>
-      <button class="icon-btn doc-item-remove" data-delete-id="${doc.document_id}" aria-label="Remove document">
-        <i class="bi bi-trash3"></i>
-      </button>
+      <div class="doc-item-meta">
+        <span class="badge-muted">${formatFileSize(doc.size_bytes)} · ${formatDate(doc.uploaded_at)}</span>
+        <button
+          class="extract-btn status-${extractionStatus}"
+          data-id="${doc.document_id}"
+          data-status="${extractionStatus}"
+          data-filename="${escapeHtml(doc.original_filename)}"
+          ${disabled}
+        >${label}</button>
+      </div>
     </div>`;
+}
+
+async function handleExtractButtonClick(button) {
+  const documentId = button.dataset.id;
+  const status = button.dataset.status;
+
+  if (status === "extracted") {
+    openTextPreview(documentId, button.dataset.filename);
+    return;
+  }
+
+  // "uploaded" or "extraction_failed" -> (re)try extraction
+  button.disabled = true;
+  button.textContent = EXTRACTION_LABELS.extracting;
+  button.className = "extract-btn status-extracting";
+
+  try {
+    const response = await fetch(`${DOCUMENTS_API}/${documentId}/extract`, { method: "POST" });
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.detail || "Extraction failed.");
+    }
+  } catch (error) {
+    // The backend already recorded extraction_failed in metadata either way -
+    // reloading the list will show the correct state and label.
+  }
+
+  loadDocuments();
 }
 
 async function deleteDocument(documentId) {
@@ -161,6 +226,71 @@ async function deleteDocument(documentId) {
   } catch (error) {
     alert("Could not delete the document. Please try again.");
   }
+}
+
+/* ---------------- Extracted text preview modal ---------------- */
+
+function initTextPreview() {
+  const overlay = document.getElementById("textPreviewOverlay");
+  const closeBtn = document.getElementById("textPreviewClose");
+
+  closeBtn.addEventListener("click", closeTextPreview);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeTextPreview();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeTextPreview();
+  });
+}
+
+function closeTextPreview() {
+  document.getElementById("textPreviewOverlay").classList.remove("show");
+}
+
+async function openTextPreview(documentId, filename) {
+  const overlay = document.getElementById("textPreviewOverlay");
+  const title = document.getElementById("textPreviewTitle");
+  const subtitle = document.getElementById("textPreviewSubtitle");
+  const body = document.getElementById("textPreviewBody");
+
+  title.textContent = filename || "Extracted Text";
+  subtitle.textContent = "Loading...";
+  body.innerHTML = "";
+  overlay.classList.add("show");
+
+  try {
+    const response = await fetch(`${DOCUMENTS_API}/${documentId}/text`);
+    if (!response.ok) throw new Error("Could not load extracted text.");
+    const data = await response.json();
+    renderTextPreview(data);
+  } catch (error) {
+    subtitle.textContent = "";
+    body.innerHTML = `<p class="doc-empty-subtitle">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderTextPreview(data) {
+  const subtitle = document.getElementById("textPreviewSubtitle");
+  const body = document.getElementById("textPreviewBody");
+
+  const charCount = data.character_count != null ? `${data.character_count} characters` : "";
+  const pageInfo = data.page_count != null ? ` · ${data.page_count} page${data.page_count === 1 ? "" : "s"}` : "";
+  subtitle.textContent = `Extracted text${charCount ? " · " + charCount : ""}${pageInfo}`;
+
+  if (data.pages && data.pages.length > 0) {
+    body.innerHTML = data.pages
+      .map(
+        (page) => `
+        <div class="text-preview-page">
+          <span class="text-preview-page-label">Page ${page.page_number}</span>
+          <p class="text-preview-page-body">${escapeHtml(page.text) || "(no text on this page)"}</p>
+        </div>`
+      )
+      .join("");
+    return;
+  }
+
+  body.innerHTML = `<p class="text-preview-page-body">${escapeHtml(data.text)}</p>`;
 }
 
 /* ---------------- Small helpers ---------------- */
@@ -185,6 +315,6 @@ function formatDate(isoString) {
 
 function escapeHtml(text) {
   const div = document.createElement("div");
-  div.textContent = text;
+  div.textContent = text == null ? "" : text;
   return div.innerHTML;
 }
