@@ -2,21 +2,14 @@
   DocuMind AI frontend script.
 
   Phase 2: upload, list, and delete documents via /api/documents.
-  Phase 3: request text extraction and preview extracted text via
-  /api/documents/{id}/extract and /api/documents/{id}/text.
+  Phase 3: request text extraction and preview raw extracted text.
+  Phase 4: request text cleaning and compare raw vs cleaned text.
 
-  This file does NOT extract text itself - it only calls the API
-  and renders whatever the backend returns.
+  This file does NOT extract or clean text itself - it only calls
+  the API and renders whatever the backend returns.
 */
 
 const DOCUMENTS_API = "/api/documents";
-
-const EXTRACTION_LABELS = {
-  uploaded: "Extract Text",
-  extracting: "Extracting...",
-  extracted: "View Text",
-  extraction_failed: "Extraction Failed",
-};
 
 document.addEventListener("DOMContentLoaded", () => {
   initUpload();
@@ -159,12 +152,47 @@ function renderDocumentList(documents) {
   docList.querySelectorAll(".extract-btn").forEach((button) => {
     button.addEventListener("click", () => handleExtractButtonClick(button));
   });
+
+  docList.querySelectorAll(".clean-btn").forEach((button) => {
+    button.addEventListener("click", () => handleCleanButtonClick(button));
+  });
+}
+
+function extractionButtonLabel(status) {
+  if (status === "extracting") return "Extracting...";
+  if (status === "extracted") return "View Text";
+  if (status === "extraction_failed") return "Extraction Failed";
+  return "Extract Text";
+}
+
+function cleaningButtonLabel(status) {
+  if (status === "cleaning") return "Cleaning...";
+  if (status === "cleaned") return "View Clean Text";
+  if (status === "cleaning_failed") return "Cleaning Failed";
+  return "Clean Text";
 }
 
 function renderDocumentItem(doc) {
   const extractionStatus = doc.extraction_status || "uploaded";
-  const label = EXTRACTION_LABELS[extractionStatus] || "Extract Text";
-  const disabled = extractionStatus === "extracting" ? "disabled" : "";
+  const cleaningStatus = doc.cleaning_status || "";
+
+  const extractLabel = extractionButtonLabel(extractionStatus);
+  const extractDisabled = extractionStatus === "extracting" ? "disabled" : "";
+
+  // The Clean Text button only appears once extraction has succeeded.
+  const showCleanBtn = extractionStatus === "extracted";
+  const cleanLabel = cleaningButtonLabel(cleaningStatus);
+  const cleanDisabled = cleaningStatus === "cleaning" ? "disabled" : "";
+
+  const cleanButtonHtml = showCleanBtn
+    ? `<button
+        class="clean-btn status-${cleaningStatus || "none"}"
+        data-id="${doc.document_id}"
+        data-status="${cleaningStatus}"
+        data-filename="${escapeHtml(doc.original_filename)}"
+        ${cleanDisabled}
+      >${cleanLabel}</button>`
+    : "";
 
   return `
     <div class="doc-item">
@@ -179,13 +207,16 @@ function renderDocumentItem(doc) {
       </div>
       <div class="doc-item-meta">
         <span class="badge-muted">${formatFileSize(doc.size_bytes)} · ${formatDate(doc.uploaded_at)}</span>
+      </div>
+      <div class="doc-item-actions">
         <button
           class="extract-btn status-${extractionStatus}"
           data-id="${doc.document_id}"
           data-status="${extractionStatus}"
           data-filename="${escapeHtml(doc.original_filename)}"
-          ${disabled}
-        >${label}</button>
+          ${extractDisabled}
+        >${extractLabel}</button>
+        ${cleanButtonHtml}
       </div>
     </div>`;
 }
@@ -201,7 +232,7 @@ async function handleExtractButtonClick(button) {
 
   // "uploaded" or "extraction_failed" -> (re)try extraction
   button.disabled = true;
-  button.textContent = EXTRACTION_LABELS.extracting;
+  button.textContent = extractionButtonLabel("extracting");
   button.className = "extract-btn status-extracting";
 
   try {
@@ -218,6 +249,34 @@ async function handleExtractButtonClick(button) {
   loadDocuments();
 }
 
+async function handleCleanButtonClick(button) {
+  const documentId = button.dataset.id;
+  const status = button.dataset.status;
+
+  if (status === "cleaned") {
+    openTextPreview(documentId, button.dataset.filename);
+    return;
+  }
+
+  // no status yet, or "cleaning_failed" -> (re)try cleaning
+  button.disabled = true;
+  button.textContent = cleaningButtonLabel("cleaning");
+  button.className = "clean-btn status-cleaning";
+
+  try {
+    const response = await fetch(`${DOCUMENTS_API}/${documentId}/clean`, { method: "POST" });
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.detail || "Cleaning failed.");
+    }
+  } catch (error) {
+    // The backend already recorded cleaning_failed in metadata either way -
+    // reloading the list will show the correct state and label.
+  }
+
+  loadDocuments();
+}
+
 async function deleteDocument(documentId) {
   try {
     const response = await fetch(`${DOCUMENTS_API}/${documentId}`, { method: "DELETE" });
@@ -228,11 +287,15 @@ async function deleteDocument(documentId) {
   }
 }
 
-/* ---------------- Extracted text preview modal ---------------- */
+/* ---------------- Raw / cleaned text preview modal ---------------- */
+
+let previewRawData = null;
+let previewCleanedData = null;
 
 function initTextPreview() {
   const overlay = document.getElementById("textPreviewOverlay");
   const closeBtn = document.getElementById("textPreviewClose");
+  const tabs = document.getElementById("textPreviewTabs");
 
   closeBtn.addEventListener("click", closeTextPreview);
   overlay.addEventListener("click", (event) => {
@@ -241,41 +304,107 @@ function initTextPreview() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeTextPreview();
   });
+
+  tabs.querySelectorAll(".text-preview-tab").forEach((tab) => {
+    tab.addEventListener("click", () => switchPreviewTab(tab.dataset.tab));
+  });
 }
 
 function closeTextPreview() {
   document.getElementById("textPreviewOverlay").classList.remove("show");
+  previewRawData = null;
+  previewCleanedData = null;
 }
 
 async function openTextPreview(documentId, filename) {
   const overlay = document.getElementById("textPreviewOverlay");
   const title = document.getElementById("textPreviewTitle");
   const subtitle = document.getElementById("textPreviewSubtitle");
+  const stats = document.getElementById("textPreviewStats");
+  const tabs = document.getElementById("textPreviewTabs");
   const body = document.getElementById("textPreviewBody");
 
   title.textContent = filename || "Extracted Text";
   subtitle.textContent = "Loading...";
+  stats.classList.remove("show");
+  tabs.classList.remove("show");
   body.innerHTML = "";
   overlay.classList.add("show");
 
+  previewRawData = null;
+  previewCleanedData = null;
+
   try {
-    const response = await fetch(`${DOCUMENTS_API}/${documentId}/text`);
-    if (!response.ok) throw new Error("Could not load extracted text.");
-    const data = await response.json();
-    renderTextPreview(data);
+    const rawResponse = await fetch(`${DOCUMENTS_API}/${documentId}/text`);
+    if (!rawResponse.ok) throw new Error("Could not load extracted text.");
+    previewRawData = await rawResponse.json();
   } catch (error) {
     subtitle.textContent = "";
-    body.innerHTML = `<p class="doc-empty-subtitle">${escapeHtml(error.message)}</p>`;
+    body.innerHTML = `<p class="text-preview-page-body">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  // Cleaned text may or may not exist yet - that's fine, it's optional.
+  try {
+    const cleanedResponse = await fetch(`${DOCUMENTS_API}/${documentId}/cleaned-text`);
+    if (cleanedResponse.ok) {
+      previewCleanedData = await cleanedResponse.json();
+    }
+  } catch (error) {
+    previewCleanedData = null;
+  }
+
+  if (previewCleanedData) {
+    tabs.classList.add("show");
+    renderPreviewStats();
+    switchPreviewTab("cleaned");
+  } else {
+    switchPreviewTab("raw");
   }
 }
 
-function renderTextPreview(data) {
+function renderPreviewStats() {
+  const stats = document.getElementById("textPreviewStats");
+  if (!previewRawData || !previewCleanedData) {
+    stats.classList.remove("show");
+    return;
+  }
+
+  const originalChars = previewRawData.character_count ?? 0;
+  const originalWords = previewRawData.text ? previewRawData.text.split(/\s+/).filter(Boolean).length : 0;
+  const cleanedChars = previewCleanedData.character_count ?? 0;
+  const cleanedWords = previewCleanedData.word_count ?? 0;
+  const pageCount = previewRawData.page_count;
+
+  stats.innerHTML = `
+    <span>Original: <strong>${originalChars}</strong> chars, <strong>${originalWords}</strong> words</span>
+    <span>Cleaned: <strong>${cleanedChars}</strong> chars, <strong>${cleanedWords}</strong> words</span>
+    ${pageCount != null ? `<span><strong>${pageCount}</strong> page${pageCount === 1 ? "" : "s"}</span>` : ""}
+  `;
+  stats.classList.add("show");
+}
+
+function switchPreviewTab(tabName) {
+  const tabs = document.getElementById("textPreviewTabs");
   const subtitle = document.getElementById("textPreviewSubtitle");
-  const body = document.getElementById("textPreviewBody");
+
+  tabs.querySelectorAll(".text-preview-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === tabName);
+  });
+
+  const data = tabName === "cleaned" ? previewCleanedData : previewRawData;
+  if (!data) return;
 
   const charCount = data.character_count != null ? `${data.character_count} characters` : "";
   const pageInfo = data.page_count != null ? ` · ${data.page_count} page${data.page_count === 1 ? "" : "s"}` : "";
-  subtitle.textContent = `Extracted text${charCount ? " · " + charCount : ""}${pageInfo}`;
+  const label = tabName === "cleaned" ? "Cleaned text" : "Raw extracted text";
+  subtitle.textContent = `${label}${charCount ? " · " + charCount : ""}${pageInfo}`;
+
+  renderTextPreviewBody(data);
+}
+
+function renderTextPreviewBody(data) {
+  const body = document.getElementById("textPreviewBody");
 
   if (data.pages && data.pages.length > 0) {
     body.innerHTML = data.pages

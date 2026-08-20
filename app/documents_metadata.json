@@ -1,17 +1,26 @@
 {
-  "bef5388da2de499b92135141c1622447": {
-    "document_id": "bef5388da2de499b92135141c1622447",
-    "original_filename": "Gazette SSC 1st A 2026.pdf",
-    "stored_filename": "bef5388da2de499b92135141c1622447.pdf",
+  "47364592956a46a3a6efa61d5749888b": {
+    "document_id": "47364592956a46a3a6efa61d5749888b",
+    "original_filename": "Supporting_Material - 1.pdf",
+    "stored_filename": "47364592956a46a3a6efa61d5749888b.pdf",
     "extension": ".pdf",
     "mime_type": "application/pdf",
-    "size_bytes": 5677335,
-    "uploaded_at": "2026-08-18T11:08:41.194753+00:00",
+    "size_bytes": 905559,
+    "uploaded_at": "2026-08-20T21:29:21.049053+00:00",
     "status": "uploaded",
     "extraction_status": "extracted",
-    "extraction_timestamp": "2026-08-18T11:08:46.531873+00:00",
-    "character_count": 4592671,
-    "page_count": 1576,
-    "extraction_error": null
+    "extraction_timestamp": "2026-08-20T21:29:22.517147+00:00",
+    "character_count": 31712,
+    "page_count": 14,
+    "extraction_error": null,
+    "cleaning_status": "cleaned",
+    "cleaning_timestamp": "2026-08-20T21:29:23.601199+00:00",
+    "cleaned_character_count": 31220,
+    "cleaned_word_count": 3510,
+    "cleaning_error": null,
+    "structure_status": null,
+    "structure_timestamp": null,
+    "section_count": null,
+    "structure_error": null
   }
 }

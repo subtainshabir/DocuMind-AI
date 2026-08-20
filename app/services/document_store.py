@@ -116,6 +116,17 @@ async def save_document(file: UploadFile) -> dict:
         "character_count": None,
         "page_count": None,
         "extraction_error": None,
+        # Phase 4 cleaning fields - all empty until /clean is called.
+        "cleaning_status": None,
+        "cleaning_timestamp": None,
+        "cleaned_character_count": None,
+        "cleaned_word_count": None,
+        "cleaning_error": None,
+        # Phase 5 structure fields - all empty until /structure is called.
+        "structure_status": None,
+        "structure_timestamp": None,
+        "section_count": None,
+        "structure_error": None,
     }
 
     all_docs = _load_metadata()
@@ -140,8 +151,8 @@ def get_document(document_id: str) -> dict:
     return document
 
 
-def update_extraction_metadata(document_id: str, **fields) -> dict:
-    """Patch a document's extraction-related metadata fields and save."""
+def update_document_metadata(document_id: str, **fields) -> dict:
+    """Patch any of a document's metadata fields (extraction, cleaning, etc.) and save."""
     all_docs = _load_metadata()
     document = all_docs.get(document_id)
     if not document:
@@ -154,7 +165,7 @@ def update_extraction_metadata(document_id: str, **fields) -> dict:
 
 
 def delete_document(document_id: str) -> None:
-    """Remove a document's stored file, its metadata entry, and any extracted text."""
+    """Remove a document's stored file, its metadata entry, and any extracted/cleaned text."""
     all_docs = _load_metadata()
     document = all_docs.get(document_id)
     if not document:
@@ -164,10 +175,14 @@ def delete_document(document_id: str) -> None:
     if stored_path.exists():
         stored_path.unlink()
 
-    # Imported here (not at top) to avoid a circular import, since
-    # document_extractor.py does not need anything from this module.
-    from services.document_extractor import delete_extracted
+    # Imported here (not at top) to avoid a circular import, since none
+    # of these modules needs anything from this one.
+    from app.services.document_extractor import delete_extracted
+    from app.services.text_cleaner import delete_cleaned
+    from app.services.structure_detector import delete_structure
     delete_extracted(document_id)
+    delete_cleaned(document_id)
+    delete_structure(document_id)
 
     del all_docs[document_id]
     _save_metadata(all_docs)

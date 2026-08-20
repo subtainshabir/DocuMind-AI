@@ -38,7 +38,7 @@ def _extract_docx(path: Path) -> dict:
     """Extract paragraph text, in order, from a DOCX file using python-docx."""
     document = DocxDocument(str(path))
     paragraphs = [p.text for p in document.paragraphs if p.text.strip()]
-    full_text = "\n".join(paragraphs)
+    full_text = "\n\n".join(paragraphs)
     return {"text": full_text, "pages": None, "page_count": None}
 
 

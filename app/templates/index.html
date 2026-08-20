@@ -203,7 +203,7 @@
 
 </div>
 
-<!-- Extracted text preview modal (Phase 3) -->
+<!-- Extracted / cleaned text preview modal (Phase 3 / Phase 4) -->
 <div id="textPreviewOverlay" class="text-preview-overlay">
   <div class="text-preview-card">
     <div class="text-preview-header">
@@ -215,11 +215,16 @@
         <i class="bi bi-x-lg"></i>
       </button>
     </div>
+    <div id="textPreviewStats" class="text-preview-stats"></div>
+    <div id="textPreviewTabs" class="text-preview-tabs">
+      <button class="text-preview-tab active" data-tab="raw">Raw Text</button>
+      <button class="text-preview-tab" data-tab="cleaned">Cleaned Text</button>
+    </div>
     <div id="textPreviewBody" class="text-preview-body"></div>
   </div>
 </div>
 
 <script src="{{ url_for('static', path='js/app.js') }}?v=1"></script>
-<script src="{{ url_for('static', path='js/documents.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='js/documents.js') }}?v=5"></script>
 </body>
 </html>
