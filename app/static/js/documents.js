@@ -349,6 +349,8 @@ async function deleteDocument(documentId) {
 let previewRawData = null;
 let previewCleanedData = null;
 let previewStructureData = null;
+let previewMetadataData = null;
+let previewStatisticsData = null;
 
 function initTextPreview() {
   const overlay = document.getElementById("textPreviewOverlay");
@@ -373,6 +375,8 @@ function closeTextPreview() {
   previewRawData = null;
   previewCleanedData = null;
   previewStructureData = null;
+  previewMetadataData = null;
+  previewStatisticsData = null;
 }
 
 async function openTextPreview(documentId, filename, preferredTab) {
@@ -393,6 +397,8 @@ async function openTextPreview(documentId, filename, preferredTab) {
   previewRawData = null;
   previewCleanedData = null;
   previewStructureData = null;
+  previewMetadataData = null;
+  previewStatisticsData = null;
 
   try {
     const rawResponse = await fetch(`${DOCUMENTS_API}/${documentId}/text`);
@@ -404,7 +410,7 @@ async function openTextPreview(documentId, filename, preferredTab) {
     return;
   }
 
-  // Cleaned text and structure may or may not exist yet - both optional.
+  // Cleaned text, structure, metadata, and statistics may or may not exist yet - all optional.
   try {
     const cleanedResponse = await fetch(`${DOCUMENTS_API}/${documentId}/cleaned-text`);
     if (cleanedResponse.ok) previewCleanedData = await cleanedResponse.json();
@@ -417,6 +423,20 @@ async function openTextPreview(documentId, filename, preferredTab) {
     if (structureResponse.ok) previewStructureData = await structureResponse.json();
   } catch (error) {
     previewStructureData = null;
+  }
+
+  try {
+    const metadataResponse = await fetch(`${DOCUMENTS_API}/${documentId}/metadata`);
+    if (metadataResponse.ok) previewMetadataData = await metadataResponse.json();
+  } catch (error) {
+    previewMetadataData = null;
+  }
+
+  try {
+    const statsResponse = await fetch(`${DOCUMENTS_API}/${documentId}/statistics`);
+    if (statsResponse.ok) previewStatisticsData = await statsResponse.json();
+  } catch (error) {
+    previewStatisticsData = null;
   }
 
   updateAvailableTabs();
@@ -435,12 +455,14 @@ async function openTextPreview(documentId, filename, preferredTab) {
 function isTabAvailable(tabName) {
   if (tabName === "cleaned") return !!previewCleanedData;
   if (tabName === "structure") return !!previewStructureData;
+  if (tabName === "metadata") return !!previewMetadataData;
+  if (tabName === "statistics") return !!previewStatisticsData;
   return true; // raw is always available once the modal opens successfully
 }
 
 function updateAvailableTabs() {
   const tabs = document.getElementById("textPreviewTabs");
-  const hasExtras = !!previewCleanedData || !!previewStructureData;
+  const hasExtras = !!previewCleanedData || !!previewStructureData || !!previewMetadataData || !!previewStatisticsData;
   tabs.classList.toggle("show", hasExtras);
 
   tabs.querySelectorAll(".text-preview-tab").forEach((tab) => {
@@ -493,6 +515,22 @@ function switchPreviewTab(tabName) {
     const sectionCount = previewStructureData.section_count;
     subtitle.textContent = `Detected structure · ${elementCount} element${elementCount === 1 ? "" : "s"} · ${sectionCount} section${sectionCount === 1 ? "" : "s"}`;
     renderStructurePreviewBody(previewStructureData);
+    return;
+  }
+
+  if (tabName === "metadata") {
+    if (!previewMetadataData) return;
+    const elementCount = previewMetadataData.element_count;
+    const sectionCount = previewMetadataData.section_count;
+    subtitle.textContent = `Page & section metadata · ${elementCount} element${elementCount === 1 ? "" : "s"} · ${sectionCount} section${sectionCount === 1 ? "" : "s"}`;
+    renderMetadataPreviewBody(previewMetadataData);
+    return;
+  }
+
+  if (tabName === "statistics") {
+    if (!previewStatisticsData) return;
+    subtitle.textContent = "Document statistics";
+    renderStatisticsPreviewBody(previewStatisticsData);
     return;
   }
 
@@ -572,6 +610,54 @@ function renderStructureElements(elements) {
   }
 
   return html;
+}
+
+function renderMetadataPreviewBody(metadataData) {
+  const body = document.getElementById("textPreviewBody");
+
+  body.innerHTML = metadataData.elements
+    .map((el) => {
+      const pageTag = el.page_number != null ? `Page ${el.page_number}` : "No page";
+      const sectionTag = el.section ? el.section : "No section";
+      return `
+        <div class="metadata-row">
+          <div class="metadata-row-tags">
+            <span class="metadata-tag">${escapeHtml(pageTag)}</span>
+            <span class="metadata-tag">${escapeHtml(sectionTag)}</span>
+            <span class="metadata-tag tag-type">${escapeHtml(el.element_type)}</span>
+          </div>
+          <p class="metadata-row-text">${escapeHtml(el.text)}</p>
+        </div>`;
+    })
+    .join("");
+}
+
+function renderStatisticsPreviewBody(statisticsData) {
+  const body = document.getElementById("textPreviewBody");
+
+  const cards = [
+    { label: "Words", value: statisticsData.word_count },
+    { label: "Characters", value: statisticsData.character_count },
+    { label: "Sentences", value: statisticsData.sentence_count },
+    { label: "Paragraphs", value: statisticsData.paragraph_count },
+    { label: "Pages", value: statisticsData.page_count },
+    { label: "Sections", value: statisticsData.section_count },
+    { label: "Headings", value: statisticsData.heading_count },
+    { label: "List Items", value: statisticsData.list_item_count },
+  ];
+
+  body.innerHTML = `
+    <div class="stats-grid">
+      ${cards
+        .map(
+          (card) => `
+        <div class="stat-card">
+          <div class="stat-card-value">${card.value}</div>
+          <div class="stat-card-label">${card.label}</div>
+        </div>`
+        )
+        .join("")}
+    </div>`;
 }
 
 /* ---------------- Small helpers ---------------- */

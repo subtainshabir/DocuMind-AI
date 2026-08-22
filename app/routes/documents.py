@@ -10,6 +10,7 @@ Phase 5: detect document structure from cleaned text, and fetch it.
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.services.document_extractor import extract_document, load_extracted
+from app.services.document_statistics import calculate_statistics
 from app.services.document_store import (
     UPLOAD_DIR,
     delete_document,
@@ -18,6 +19,7 @@ from app.services.document_store import (
     save_document,
     update_document_metadata,
 )
+from app.services.metadata_builder import build_metadata
 from app.services.structure_detector import load_structure, structure_document
 from app.services.text_cleaner import clean_document, load_cleaned
 
@@ -192,3 +194,59 @@ def get_document_structure(document_id: str):
         raise HTTPException(status_code=404, detail="This document's structure has not been detected yet.")
 
     return structure
+
+
+@router.get("/{document_id}/metadata")
+def get_document_metadata(document_id: str):
+    """
+    Return the document's page/section metadata - a flat list of every
+    element with its page, section, type, and position, plus the list
+    of sections in order. Built fresh from the document's structure each
+    time this is called, so it always reflects the latest structure data.
+    """
+    get_document(document_id)  # 404s if the document itself doesn't exist
+
+    structure = load_structure(document_id)
+    if not structure:
+        raise HTTPException(
+            status_code=400,
+            detail="This document's structure must be detected before metadata can be generated.",
+        )
+
+    return build_metadata(document_id, structure)
+
+
+@router.get("/{document_id}/statistics")
+def get_document_statistics(document_id: str):
+    """
+    Calculate document statistics from cleaned text and detected structure.
+    Requires both to already exist. The result is also cached onto the
+    document's metadata so it doesn't need to be recalculated elsewhere.
+    """
+    document = get_document(document_id)  # 404s if the document itself doesn't exist
+
+    if document.get("cleaning_status") != "cleaned":
+        raise HTTPException(
+            status_code=400,
+            detail="This document must be cleaned before statistics can be calculated.",
+        )
+
+    cleaned = load_cleaned(document_id)
+    if not cleaned:
+        raise HTTPException(status_code=404, detail="Cleaned text is missing for this document.")
+
+    if document.get("structure_status") != "structured":
+        raise HTTPException(
+            status_code=400,
+            detail="This document's structure must be detected before statistics can be calculated.",
+        )
+
+    structure = load_structure(document_id)
+    if not structure:
+        raise HTTPException(status_code=404, detail="Structure data is missing for this document.")
+
+    statistics = calculate_statistics(document_id, cleaned, structure)
+
+    update_document_metadata(document_id, statistics=statistics)
+
+    return statistics

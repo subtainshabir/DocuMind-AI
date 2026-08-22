@@ -180,9 +180,11 @@ def delete_document(document_id: str) -> None:
     from app.services.document_extractor import delete_extracted
     from app.services.text_cleaner import delete_cleaned
     from app.services.structure_detector import delete_structure
+    from app.services.metadata_builder import delete_metadata
     delete_extracted(document_id)
     delete_cleaned(document_id)
     delete_structure(document_id)
+    delete_metadata(document_id)
 
     del all_docs[document_id]
     _save_metadata(all_docs)

@@ -1,1 +1,37 @@
-{}
+{
+  "0fced26fc31f479ebc233d99e3767cc5": {
+    "document_id": "0fced26fc31f479ebc233d99e3767cc5",
+    "original_filename": "final report.pdf",
+    "stored_filename": "0fced26fc31f479ebc233d99e3767cc5.pdf",
+    "extension": ".pdf",
+    "mime_type": "application/pdf",
+    "size_bytes": 586958,
+    "uploaded_at": "2026-08-22T19:42:35.653309+00:00",
+    "status": "uploaded",
+    "extraction_status": "extracted",
+    "extraction_timestamp": "2026-08-22T19:42:37.253243+00:00",
+    "character_count": 31659,
+    "page_count": 8,
+    "extraction_error": null,
+    "cleaning_status": "cleaned",
+    "cleaning_timestamp": "2026-08-22T19:42:38.171192+00:00",
+    "cleaned_character_count": 30863,
+    "cleaned_word_count": 4517,
+    "cleaning_error": null,
+    "structure_status": "structured",
+    "structure_timestamp": "2026-08-22T19:42:41.738427+00:00",
+    "section_count": 10,
+    "structure_error": null,
+    "statistics": {
+      "document_id": "0fced26fc31f479ebc233d99e3767cc5",
+      "character_count": 30863,
+      "word_count": 4517,
+      "sentence_count": 378,
+      "paragraph_count": 28,
+      "page_count": 8,
+      "section_count": 10,
+      "heading_count": 10,
+      "list_item_count": 4
+    }
+  }
+}
