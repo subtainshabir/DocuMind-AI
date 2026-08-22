@@ -4,9 +4,10 @@
   Phase 2: upload, list, and delete documents via /api/documents.
   Phase 3: request text extraction and preview raw extracted text.
   Phase 4: request text cleaning and compare raw vs cleaned text.
+  Phase 5: request structure detection and preview detected structure.
 
-  This file does NOT extract or clean text itself - it only calls
-  the API and renders whatever the backend returns.
+  This file does NOT extract, clean, or detect structure itself - it
+  only calls the API and renders whatever the backend returns.
 */
 
 const DOCUMENTS_API = "/api/documents";
@@ -156,6 +157,10 @@ function renderDocumentList(documents) {
   docList.querySelectorAll(".clean-btn").forEach((button) => {
     button.addEventListener("click", () => handleCleanButtonClick(button));
   });
+
+  docList.querySelectorAll(".structure-btn").forEach((button) => {
+    button.addEventListener("click", () => handleStructureButtonClick(button));
+  });
 }
 
 function extractionButtonLabel(status) {
@@ -172,9 +177,17 @@ function cleaningButtonLabel(status) {
   return "Clean Text";
 }
 
+function structureButtonLabel(status) {
+  if (status === "detecting") return "Detecting...";
+  if (status === "structured") return "View Structure";
+  if (status === "structure_failed") return "Structure Failed";
+  return "Detect Structure";
+}
+
 function renderDocumentItem(doc) {
   const extractionStatus = doc.extraction_status || "uploaded";
   const cleaningStatus = doc.cleaning_status || "";
+  const structureStatus = doc.structure_status || "";
 
   const extractLabel = extractionButtonLabel(extractionStatus);
   const extractDisabled = extractionStatus === "extracting" ? "disabled" : "";
@@ -184,6 +197,11 @@ function renderDocumentItem(doc) {
   const cleanLabel = cleaningButtonLabel(cleaningStatus);
   const cleanDisabled = cleaningStatus === "cleaning" ? "disabled" : "";
 
+  // The Detect Structure button only appears once cleaning has succeeded.
+  const showStructureBtn = cleaningStatus === "cleaned";
+  const structureLabel = structureButtonLabel(structureStatus);
+  const structureDisabled = structureStatus === "detecting" ? "disabled" : "";
+
   const cleanButtonHtml = showCleanBtn
     ? `<button
         class="clean-btn status-${cleaningStatus || "none"}"
@@ -192,6 +210,16 @@ function renderDocumentItem(doc) {
         data-filename="${escapeHtml(doc.original_filename)}"
         ${cleanDisabled}
       >${cleanLabel}</button>`
+    : "";
+
+  const structureButtonHtml = showStructureBtn
+    ? `<button
+        class="structure-btn status-${structureStatus || "none"}"
+        data-id="${doc.document_id}"
+        data-status="${structureStatus}"
+        data-filename="${escapeHtml(doc.original_filename)}"
+        ${structureDisabled}
+      >${structureLabel}</button>`
     : "";
 
   return `
@@ -217,6 +245,7 @@ function renderDocumentItem(doc) {
           ${extractDisabled}
         >${extractLabel}</button>
         ${cleanButtonHtml}
+        ${structureButtonHtml}
       </div>
     </div>`;
 }
@@ -277,6 +306,34 @@ async function handleCleanButtonClick(button) {
   loadDocuments();
 }
 
+async function handleStructureButtonClick(button) {
+  const documentId = button.dataset.id;
+  const status = button.dataset.status;
+
+  if (status === "structured") {
+    openTextPreview(documentId, button.dataset.filename, "structure");
+    return;
+  }
+
+  // no status yet, or "structure_failed" -> (re)try detection
+  button.disabled = true;
+  button.textContent = structureButtonLabel("detecting");
+  button.className = "structure-btn status-detecting";
+
+  try {
+    const response = await fetch(`${DOCUMENTS_API}/${documentId}/structure`, { method: "POST" });
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.detail || "Structure detection failed.");
+    }
+  } catch (error) {
+    // The backend already recorded structure_failed in metadata either way -
+    // reloading the list will show the correct state and label.
+  }
+
+  loadDocuments();
+}
+
 async function deleteDocument(documentId) {
   try {
     const response = await fetch(`${DOCUMENTS_API}/${documentId}`, { method: "DELETE" });
@@ -287,10 +344,11 @@ async function deleteDocument(documentId) {
   }
 }
 
-/* ---------------- Raw / cleaned text preview modal ---------------- */
+/* ---------------- Raw / cleaned / structure preview modal ---------------- */
 
 let previewRawData = null;
 let previewCleanedData = null;
+let previewStructureData = null;
 
 function initTextPreview() {
   const overlay = document.getElementById("textPreviewOverlay");
@@ -314,9 +372,10 @@ function closeTextPreview() {
   document.getElementById("textPreviewOverlay").classList.remove("show");
   previewRawData = null;
   previewCleanedData = null;
+  previewStructureData = null;
 }
 
-async function openTextPreview(documentId, filename) {
+async function openTextPreview(documentId, filename, preferredTab) {
   const overlay = document.getElementById("textPreviewOverlay");
   const title = document.getElementById("textPreviewTitle");
   const subtitle = document.getElementById("textPreviewSubtitle");
@@ -333,6 +392,7 @@ async function openTextPreview(documentId, filename) {
 
   previewRawData = null;
   previewCleanedData = null;
+  previewStructureData = null;
 
   try {
     const rawResponse = await fetch(`${DOCUMENTS_API}/${documentId}/text`);
@@ -344,23 +404,51 @@ async function openTextPreview(documentId, filename) {
     return;
   }
 
-  // Cleaned text may or may not exist yet - that's fine, it's optional.
+  // Cleaned text and structure may or may not exist yet - both optional.
   try {
     const cleanedResponse = await fetch(`${DOCUMENTS_API}/${documentId}/cleaned-text`);
-    if (cleanedResponse.ok) {
-      previewCleanedData = await cleanedResponse.json();
-    }
+    if (cleanedResponse.ok) previewCleanedData = await cleanedResponse.json();
   } catch (error) {
     previewCleanedData = null;
   }
 
-  if (previewCleanedData) {
-    tabs.classList.add("show");
-    renderPreviewStats();
+  try {
+    const structureResponse = await fetch(`${DOCUMENTS_API}/${documentId}/structure`);
+    if (structureResponse.ok) previewStructureData = await structureResponse.json();
+  } catch (error) {
+    previewStructureData = null;
+  }
+
+  updateAvailableTabs();
+
+  if (preferredTab && isTabAvailable(preferredTab)) {
+    switchPreviewTab(preferredTab);
+  } else if (previewStructureData) {
+    switchPreviewTab("structure");
+  } else if (previewCleanedData) {
     switchPreviewTab("cleaned");
   } else {
     switchPreviewTab("raw");
   }
+}
+
+function isTabAvailable(tabName) {
+  if (tabName === "cleaned") return !!previewCleanedData;
+  if (tabName === "structure") return !!previewStructureData;
+  return true; // raw is always available once the modal opens successfully
+}
+
+function updateAvailableTabs() {
+  const tabs = document.getElementById("textPreviewTabs");
+  const hasExtras = !!previewCleanedData || !!previewStructureData;
+  tabs.classList.toggle("show", hasExtras);
+
+  tabs.querySelectorAll(".text-preview-tab").forEach((tab) => {
+    const name = tab.dataset.tab;
+    tab.style.display = isTabAvailable(name) ? "" : "none";
+  });
+
+  renderPreviewStats();
 }
 
 function renderPreviewStats() {
@@ -376,11 +464,18 @@ function renderPreviewStats() {
   const cleanedWords = previewCleanedData.word_count ?? 0;
   const pageCount = previewRawData.page_count;
 
-  stats.innerHTML = `
+  let html = `
     <span>Original: <strong>${originalChars}</strong> chars, <strong>${originalWords}</strong> words</span>
     <span>Cleaned: <strong>${cleanedChars}</strong> chars, <strong>${cleanedWords}</strong> words</span>
-    ${pageCount != null ? `<span><strong>${pageCount}</strong> page${pageCount === 1 ? "" : "s"}</span>` : ""}
   `;
+  if (pageCount != null) {
+    html += `<span><strong>${pageCount}</strong> page${pageCount === 1 ? "" : "s"}</span>`;
+  }
+  if (previewStructureData) {
+    html += `<span><strong>${previewStructureData.section_count}</strong> section${previewStructureData.section_count === 1 ? "" : "s"}</span>`;
+  }
+
+  stats.innerHTML = html;
   stats.classList.add("show");
 }
 
@@ -391,6 +486,15 @@ function switchPreviewTab(tabName) {
   tabs.querySelectorAll(".text-preview-tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
   });
+
+  if (tabName === "structure") {
+    if (!previewStructureData) return;
+    const elementCount = previewStructureData.element_count;
+    const sectionCount = previewStructureData.section_count;
+    subtitle.textContent = `Detected structure · ${elementCount} element${elementCount === 1 ? "" : "s"} · ${sectionCount} section${sectionCount === 1 ? "" : "s"}`;
+    renderStructurePreviewBody(previewStructureData);
+    return;
+  }
 
   const data = tabName === "cleaned" ? previewCleanedData : previewRawData;
   if (!data) return;
@@ -420,6 +524,54 @@ function renderTextPreviewBody(data) {
   }
 
   body.innerHTML = `<p class="text-preview-page-body">${escapeHtml(data.text)}</p>`;
+}
+
+function renderStructurePreviewBody(structureData) {
+  const body = document.getElementById("textPreviewBody");
+
+  body.innerHTML = structureData.pages
+    .map((page) => {
+      const pageLabel = page.page_number != null
+        ? `<span class="text-preview-page-label">Page ${page.page_number}</span>`
+        : "";
+      return `<div class="text-preview-page">${pageLabel}${renderStructureElements(page.elements)}</div>`;
+    })
+    .join("");
+}
+
+function renderStructureElements(elements) {
+  let html = "";
+  let i = 0;
+
+  while (i < elements.length) {
+    const element = elements[i];
+
+    if (element.element_type === "heading") {
+      html += `<p class="structure-heading">${escapeHtml(element.text)}</p>`;
+      i += 1;
+      continue;
+    }
+
+    if (element.element_type === "bullet" || element.element_type === "numbered_item") {
+      const listType = element.element_type;
+      const items = [];
+      while (i < elements.length && elements[i].element_type === listType) {
+        items.push(elements[i].text);
+        i += 1;
+      }
+      const tag = listType === "numbered_item" ? "ol" : "ul";
+      html += `<${tag} class="structure-list">`;
+      html += items.map((text) => `<li class="structure-list-item">${escapeHtml(text)}</li>`).join("");
+      html += `</${tag}>`;
+      continue;
+    }
+
+    // paragraph
+    html += `<p class="structure-paragraph">${escapeHtml(element.text)}</p>`;
+    i += 1;
+  }
+
+  return html;
 }
 
 /* ---------------- Small helpers ---------------- */

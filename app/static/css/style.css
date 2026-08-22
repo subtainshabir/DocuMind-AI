@@ -634,10 +634,11 @@ button { font-family: inherit; cursor: pointer; }
 .doc-item-error { color: var(--color-error); }
 .doc-item-remove:hover { color: var(--color-error); }
 
-/* Extract-text / Clean-text action buttons (Phase 3 / Phase 4) */
+/* Extract-text / Clean-text / Detect-structure action buttons (Phase 3 / 4 / 5) */
 
 .extract-btn,
-.clean-btn {
+.clean-btn,
+.structure-btn {
   flex-shrink: 0;
   border: 1px solid var(--color-border);
   border-radius: 20px;
@@ -649,22 +650,26 @@ button { font-family: inherit; cursor: pointer; }
   transition: var(--transition-theme), border-color 0.15s ease;
 }
 .extract-btn:hover:not(:disabled),
-.clean-btn:hover:not(:disabled) {
+.clean-btn:hover:not(:disabled),
+.structure-btn:hover:not(:disabled) {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 .extract-btn:disabled,
-.clean-btn:disabled {
+.clean-btn:disabled,
+.structure-btn:disabled {
   cursor: default;
   opacity: 0.7;
 }
 .extract-btn.status-extracted,
-.clean-btn.status-cleaned {
+.clean-btn.status-cleaned,
+.structure-btn.status-structured {
   border-color: var(--color-success);
   color: var(--color-success);
 }
 .extract-btn.status-extraction_failed,
-.clean-btn.status-cleaning_failed {
+.clean-btn.status-cleaning_failed,
+.structure-btn.status-structure_failed {
   border-color: var(--color-error);
   color: var(--color-error);
 }
@@ -775,6 +780,31 @@ button { font-family: inherit; cursor: pointer; }
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
+}
+
+/* Structure preview (Phase 5) */
+
+.structure-heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin: 16px 0 6px;
+  color: var(--color-text);
+}
+.structure-heading:first-child { margin-top: 0; }
+
+.structure-paragraph {
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+
+.structure-list {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.structure-list-item {
+  margin-bottom: 4px;
+  line-height: 1.5;
 }
 
 @media (max-width: 520px) {

@@ -43,25 +43,38 @@ def _looks_like_heading(line: str) -> bool:
 
 
 def _detect_block_elements(block_text: str) -> list:
-    """Classify one cleaned block (a group of lines with no blank line between them)."""
+    """
+    Classify one cleaned block (a group of lines with no blank line between
+    them) into one or more elements. Bullets and numbered items are always
+    their own element; consecutive plain lines are grouped into a paragraph
+    (or a heading, if that group is just one short, unpunctuated line).
+    """
     lines = [line for line in block_text.split("\n") if line.strip()]
     if not lines:
         return []
 
-    line_types = [_classify_line(line) for line in lines]
+    elements = []
+    plain_lines = []
 
-    if all(t == "bullet" for t, _ in line_types):
-        return [{"element_type": "bullet", "text": text} for _, text in line_types]
+    def flush_plain_lines():
+        if not plain_lines:
+            return
+        if len(plain_lines) == 1 and _looks_like_heading(plain_lines[0]):
+            elements.append({"element_type": "heading", "text": plain_lines[0]})
+        else:
+            elements.append({"element_type": "paragraph", "text": " ".join(plain_lines)})
+        plain_lines.clear()
 
-    if all(t == "numbered_item" for t, _ in line_types):
-        return [{"element_type": "numbered_item", "text": text} for _, text in line_types]
+    for line in lines:
+        line_type, text = _classify_line(line)
+        if line_type in ("bullet", "numbered_item"):
+            flush_plain_lines()
+            elements.append({"element_type": line_type, "text": text})
+        else:
+            plain_lines.append(line)
 
-    if len(lines) == 1 and line_types[0][0] is None and _looks_like_heading(lines[0]):
-        return [{"element_type": "heading", "text": lines[0]}]
-
-    # Mixed or ordinary content - treat the whole block as one paragraph.
-    paragraph_text = " ".join(lines)
-    return [{"element_type": "paragraph", "text": paragraph_text}]
+    flush_plain_lines()
+    return elements
 
 
 def _detect_page_elements(page_text: str) -> list:
